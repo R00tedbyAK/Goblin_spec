@@ -17,14 +17,10 @@ app.post('/api/inspect', async (req, res) => {
     if (!url) return res.status(400).json({ error: 'URL is required' });
 
     try {
-        // Clean up the URL string
         url = url.trim();
 
         // 1. FLEXIBLE GITHUB REPOSITORY DETECTION
-        // Matches https://github.com/owner/repo with optional trailing slashes or .git extensions
         const githubMatch = url.match(/^https?:\/\/github\.com\/([^\/]+)\/([^\/]+?)(?:\.git)?(\/.*)?$/i);
-        
-        // Ensure it's a repository main page (not a /blob/, /issues/, /pull/, etc.)
         const isRepoMainPage = githubMatch && (!githubMatch[3] || githubMatch[3] === '/');
 
         if (isRepoMainPage) {
@@ -32,7 +28,7 @@ app.post('/api/inspect', async (req, res) => {
             const repo = githubMatch[2];
             const apiHeaders = { 
                 'User-Agent': 'Goblin-Specs-App',
-                'Accept': 'vnd.github+json'
+                'Accept': 'application/vnd.github+json'
             };
 
             const [repoRes, langRes, pkgRes] = await Promise.all([
@@ -76,7 +72,7 @@ app.post('/api/inspect', async (req, res) => {
             });
         }
 
-        // 2. FILE / DIRECT IMAGE INSPECTION
+        // 2. GITHUB BLOB / FILE CONVERSION
         if (url.includes('github.com') && url.includes('/blob/')) {
             url = url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
         }
@@ -87,7 +83,7 @@ app.post('/api/inspect', async (req, res) => {
         if (isDirectImage) {
             imageUrl = url;
         } else {
-            // 3. SOCIAL MEDIA & GENERAL WEB SCRAPER
+            // 3. SOCIAL MEDIA & GENERAL WEB SCRAPER WITH FALLBACK
             const userAgentString = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36';
             try {
                 const { result } = await ogs({ 
@@ -96,7 +92,8 @@ app.post('/api/inspect', async (req, res) => {
                     fetchOptions: { 
                         headers: { 
                             'user-agent': userAgentString,
-                            'Accept-Language': 'en-US,en;q=0.9'
+                            'Accept-Language': 'en-US,en;q=0.9',
+                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
                         } 
                     }
                 });
@@ -113,7 +110,10 @@ app.post('/api/inspect', async (req, res) => {
         }
 
         // Fetch image binary to compute media dimensions & aspect ratios
-        const imageRes = await fetch(imageUrl);
+        const imageRes = await fetch(imageUrl, {
+            headers: { 'User-Agent': 'Goblin-Specs-App' }
+        });
+        
         if (!imageRes.ok) throw new Error(`Failed to fetch image binary (HTTP ${imageRes.status})`);
         
         const arrayBuffer = await imageRes.arrayBuffer();
