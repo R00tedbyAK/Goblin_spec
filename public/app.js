@@ -12,7 +12,7 @@ async function inspectLink() {
     btn.disabled = true;
 
     try {
-        const response = await fetch('http://localhost:3000/api/inspect', {
+        const response = await fetch('/api/inspect', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url })
