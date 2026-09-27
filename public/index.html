@@ -7,6 +7,16 @@
     <!-- Website Favicon -->
     <link rel="icon" type="image/png" href="/goblin-icon.png">
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes goblinJump {
+            0% { transform: translateY(50px) scale(0.5); opacity: 0; }
+            50% { transform: translateY(-20px) scale(1.1); opacity: 1; }
+            100% { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        .animate-goblin-jump {
+            animation: goblinJump 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+    </style>
 </head>
 <body class="bg-[#050505] text-slate-100 min-h-screen flex flex-col items-center justify-center p-6 selection:bg-lime-500 selection:text-black">
 
@@ -30,12 +40,18 @@
         <!-- Loading / Status -->
         <div id="statusMsg" class="text-lime-400 font-medium h-6"></div>
 
-        <!-- Result Card -->
+        <!-- Result Card with Jump Animation Trigger -->
         <div id="resultCard" class="hidden bg-neutral-900/90 border border-neutral-800 rounded-2xl p-6 text-left shadow-2xl space-y-6 backdrop-blur-md">
             
             <!-- Header Section -->
             <div class="flex items-center gap-4 border-b border-neutral-800 pb-4">
-                <img id="resImage" src="" alt="Preview" class="w-20 h-20 rounded-xl object-cover border border-neutral-700 bg-neutral-950">
+                <div class="relative">
+                    <img id="resImage" src="" alt="Preview" class="w-20 h-20 rounded-xl object-cover border border-neutral-700 bg-neutral-950">
+                    <!-- Jumping Goblin Icon Badge -->
+                    <div id="jumpingGoblinBadge" class="hidden absolute -top-3 -right-3 bg-lime-500 text-black text-xs font-black px-2 py-0.5 rounded-full shadow-lg animate-bounce">
+                        🧌 JUMP!
+                    </div>
+                </div>
                 <div>
                     <h2 id="resTitle" class="text-2xl font-bold text-white"></h2>
                     <p id="resDesc" class="text-slate-400 text-sm mt-1"></p>
@@ -59,6 +75,7 @@
             const resTitle = document.getElementById('resTitle');
             const resDesc = document.getElementById('resDesc');
             const resBody = document.getElementById('resBody');
+            const jumpingGoblinBadge = document.getElementById('jumpingGoblinBadge');
 
             if (!url) {
                 statusMsg.innerText = "Please enter a valid URL!";
@@ -67,6 +84,8 @@
 
             statusMsg.innerText = "The goblin scouts are foraging...";
             resultCard.classList.add('hidden');
+            resultCard.classList.remove('animate-goblin-jump');
+            jumpingGoblinBadge.classList.add('hidden');
 
             try {
                 const response = await fetch('/api/inspect', {
@@ -83,10 +102,15 @@
 
                 statusMsg.innerText = "";
                 resultCard.classList.remove('hidden');
+                
+                // Trigger the jump animation sequence
+                resultCard.classList.add('animate-goblin-jump');
                 resImage.src = data.imageUrl || 'https://via.placeholder.com/150';
 
                 if (data.type === 'github_repo') {
-                    // RENDER GITHUB REPOSITORY INSIGHTS
+                    // Show jumping goblin badge for GitHub repo success
+                    jumpingGoblinBadge.classList.remove('hidden');
+
                     resTitle.innerText = data.repoName;
                     resDesc.innerText = data.description || "No description provided.";
 
