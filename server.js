@@ -17,36 +17,105 @@ app.post('/api/inspect', async (req, res) => {
     if (!url) return res.status(400).json({ error: 'URL is required' });
 
     try {
-        let imageUrl = null;
+        // 1. PLATFORM DETECTION
+        const isGitHubRepo = /^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)(\/)?$/i.test(url);
+        const isInstagram = /instagram\.com/i.test(url);
+        const isFacebook = /facebook\.com/i.test(url);
+        const isTwitter = /(twitter\.com|x\.com)/i.test(url);
+        const isReddit = /reddit\.com/i.test(url);
 
-        // Smart fix: Automatically convert GitHub /blob/ links to raw.githubusercontent.com links
+        // 2. GITHUB REPOSITORY ANALYZER
+        if (isGitHubRepo) {
+            const match = url.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+            const owner = match[1];
+            const repo = match[2].replace('.git', '');
+            const apiHeaders = { 'User-Agent': 'Goblin-Specs-App' };
+
+            const [repoRes, langRes, pkgRes] = await Promise.all([
+                fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers: apiHeaders }),
+                fetch(`https://api.github.com/repos/${owner}/${repo}/languages`, { headers: apiHeaders }),
+                fetch(`https://raw.githubusercontent.com/${owner}/${repo}/main/package.json`, { headers: apiHeaders }).catch(() => null)
+            ]);
+
+            if (!repoRes.ok) {
+                return res.status(404).json({ error: 'The goblin scouts could not find this GitHub repository.' });
+            }
+
+            const repoData = await repoRes.json();
+            const languages = langRes.ok ? await langRes.json() : {};
+            let packageInfo = null;
+            
+            if (pkgRes && pkgRes.ok) {
+                try {
+                    const pkgJson = await pkgRes.json();
+                    packageInfo = {
+                        name: pkgJson.name || repo,
+                        version: pkgJson.version || '1.0.0',
+                        nodeVersion: pkgJson.engines?.node || 'Not specified',
+                        dependencies: pkgJson.dependencies ? Object.keys(pkgJson.dependencies) : []
+                    };
+                } catch (e) {
+                    packageInfo = { note: 'package.json found but unparseable.' };
+                }
+            }
+
+            return res.json({
+                success: true,
+                type: 'github_repo',
+                repoName: repoData.full_name,
+                description: repoData.description,
+                stars: repoData.stargazers_count,
+                forks: repoData.forks_count,
+                languages,
+                packageInfo,
+                imageUrl: repoData.owner.avatar_url
+            });
+        }
+
+        // 3. MEDIA & SOCIAL PLATFORM INSPECTION
         if (url.includes('github.com') && url.includes('/blob/')) {
             url = url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
         }
 
-        // Check if the URL is a direct image or a raw file link
         const isDirectImage = /\.(jpeg|jpg|gif|png|webp|svg)(\?.*)?$/i.test(url) || url.includes('raw.githubusercontent.com');
+        let imageUrl = null;
 
         if (isDirectImage) {
             imageUrl = url;
         } else {
-            // Otherwise, try scraping OpenGraph metadata from regular web pages
+            // Attempt scraping for web pages and social previews with custom browser headers
             const userAgentString = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36';
-            const { result } = await ogs({ 
-                url: url, 
-                timeout: 5000,
-                fetchOptions: {
-                    headers: { 'user-agent': userAgentString }
-                }
-            });
-            imageUrl = result.ogImage && result.ogImage.url ? result.ogImage.url : null;
+            try {
+                const { result } = await ogs({ 
+                    url: url, 
+                    timeout: 6000,
+                    fetchOptions: { 
+                        headers: { 
+                            'user-agent': userAgentString,
+                            'Accept-Language': 'en-US,en;q=0.9'
+                        } 
+                    }
+                });
+                imageUrl = result.ogImage && result.ogImage.url ? result.ogImage.url : null;
+            } catch (scrapeErr) {
+                console.warn("Scraper warning:", scrapeErr.message);
+            }
         }
 
+        // Graceful handling for heavily restricted social platforms
         if (!imageUrl) {
-            return res.status(404).json({ error: 'The goblin scouts could not extract preview media from this link.' });
+            let platformName = "Web Page";
+            if (isInstagram) platformName = "Instagram";
+            else if (isFacebook) platformName = "Facebook";
+            else if (isTwitter) platformName = "X (Twitter)";
+            else if (isReddit) platformName = "Reddit";
+
+            return res.status(422).json({ 
+                error: `The ${platformName} security wall blocked the goblin scouts from extracting preview media directly. Try a direct image URL or public repository link!` 
+            });
         }
 
-        // Fetch the image buffer to calculate dimensions
+        // Fetch image binary to compute media dimensions & aspect ratios
         const imageRes = await fetch(imageUrl);
         if (!imageRes.ok) throw new Error(`Failed to fetch image binary (HTTP ${imageRes.status})`);
         
@@ -57,7 +126,6 @@ app.post('/api/inspect', async (req, res) => {
         const width = dimensions.width;
         const height = dimensions.height;
 
-        // Calculate aspect ratio
         const divisor = gcd(width, height);
         const ratioText = `${width / divisor}:${height / divisor}`;
         const decimalRatio = width / height;
@@ -69,6 +137,7 @@ app.post('/api/inspect', async (req, res) => {
 
         res.json({
             success: true,
+            type: 'media_specs',
             imageUrl,
             width,
             height,
@@ -78,7 +147,7 @@ app.post('/api/inspect', async (req, res) => {
 
     } catch (error) {
         console.error("Inspection error:", error);
-        res.status(500).json({ error: 'The pixel goblins failed to parse this link. Make sure it points to a valid image or page.' });
+        res.status(500).json({ error: 'The pixel goblins failed to parse this link.' });
     }
 });
 
