@@ -19,7 +19,7 @@ app.post('/api/inspect', async (req, res) => {
     try {
         url = url.trim();
 
-        // 1. FLEXIBLE GITHUB REPOSITORY DETECTION
+        // 1. FLEXIBLE GITHUB REPOSITORY DEEP-SCANNER
         const githubMatch = url.match(/^https?:\/\/github\.com\/([^\/]+)\/([^\/]+?)(?:\.git)?(\/.*)?$/i);
         const isRepoMainPage = githubMatch && (!githubMatch[3] || githubMatch[3] === '/');
 
@@ -31,10 +31,14 @@ app.post('/api/inspect', async (req, res) => {
                 'Accept': 'application/vnd.github+json'
             };
 
-            const [repoRes, langRes, pkgRes] = await Promise.all([
+            // Fetch repo details, languages, root contents, and various backend config files concurrently
+            const [repoRes, langRes, contentsRes, pkgRes, pyRes, dockerRes] = await Promise.all([
                 fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers: apiHeaders }),
                 fetch(`https://api.github.com/repos/${owner}/${repo}/languages`, { headers: apiHeaders }),
-                fetch(`https://raw.githubusercontent.com/${owner}/${repo}/main/package.json`, { headers: apiHeaders }).catch(() => null)
+                fetch(`https://api.github.com/repos/${owner}/${repo}/contents`, { headers: apiHeaders }),
+                fetch(`https://raw.githubusercontent.com/${owner}/${repo}/main/package.json`, { headers: apiHeaders }).catch(() => null),
+                fetch(`https://raw.githubusercontent.com/${owner}/${repo}/main/requirements.txt`, { headers: apiHeaders }).catch(() => null),
+                fetch(`https://raw.githubusercontent.com/${owner}/${repo}/main/Dockerfile`, { headers: apiHeaders }).catch(() => null)
             ]);
 
             if (!repoRes.ok) {
@@ -43,20 +47,33 @@ app.post('/api/inspect', async (req, res) => {
 
             const repoData = await repoRes.json();
             const languages = langRes.ok ? await langRes.json() : {};
-            let packageInfo = null;
+            const contentsData = contentsRes.ok ? await contentsRes.json() : [];
             
+            // Extract file/folder names inside the repo root
+            const fileContents = Array.isArray(contentsData) 
+                ? contentsData.map(item => ({ name: item.name, type: item.type }))
+                : [];
+
+            // Detect Backend Service & Runtime Stack
+            let backendStack = "No explicit backend config found (Static / Frontend)";
+            let versionInfo = "Not specified";
+            let dependencies = [];
+
             if (pkgRes && pkgRes.ok) {
                 try {
                     const pkgJson = await pkgRes.json();
-                    packageInfo = {
-                        name: pkgJson.name || repo,
-                        version: pkgJson.version || '1.0.0',
-                        nodeVersion: pkgJson.engines?.node || 'Not specified',
-                        dependencies: pkgJson.dependencies ? Object.keys(pkgJson.dependencies) : []
-                    };
-                } catch (e) {
-                    packageInfo = { note: 'package.json found but unparseable.' };
-                }
+                    backendStack = "Node.js (Express / JavaScript Ecosystem)";
+                    versionInfo = pkgJson.engines?.node ? `Node ${pkgJson.engines.node}` : "Node.js (Version unconstrained)";
+                    dependencies = pkgJson.dependencies ? Object.keys(pkgJson.dependencies) : [];
+                } catch (e) {}
+            } else if (pyRes && pyRes.ok) {
+                backendStack = "Python (Flask / FastAPI / Django)";
+                versionInfo = "Python ecosystem";
+                const reqText = await pyRes.text();
+                dependencies = reqText.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#')).slice(0, 10);
+            } else if (dockerRes && dockerRes.ok) {
+                backendStack = "Docker Containerized Service";
+                versionInfo = "Custom Container Runtime";
             }
 
             return res.json({
@@ -67,7 +84,12 @@ app.post('/api/inspect', async (req, res) => {
                 stars: repoData.stargazers_count,
                 forks: repoData.forks_count,
                 languages,
-                packageInfo,
+                fileContents,
+                backendService: {
+                    stack: backendStack,
+                    version: versionInfo,
+                    dependencies
+                },
                 imageUrl: repoData.owner.avatar_url
             });
         }
@@ -83,7 +105,7 @@ app.post('/api/inspect', async (req, res) => {
         if (isDirectImage) {
             imageUrl = url;
         } else {
-            // 3. SOCIAL MEDIA & GENERAL WEB SCRAPER WITH FALLBACK
+            // 3. SOCIAL MEDIA & GENERAL WEB SCRAPER
             const userAgentString = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36';
             try {
                 const { result } = await ogs({ 
