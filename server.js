@@ -17,19 +17,23 @@ app.post('/api/inspect', async (req, res) => {
     if (!url) return res.status(400).json({ error: 'URL is required' });
 
     try {
-        // 1. PLATFORM DETECTION
-        const isGitHubRepo = /^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)(\/)?$/i.test(url);
-        const isInstagram = /instagram\.com/i.test(url);
-        const isFacebook = /facebook\.com/i.test(url);
-        const isTwitter = /(twitter\.com|x\.com)/i.test(url);
-        const isReddit = /reddit\.com/i.test(url);
+        // Clean up the URL string
+        url = url.trim();
 
-        // 2. GITHUB REPOSITORY ANALYZER
-        if (isGitHubRepo) {
-            const match = url.match(/github\.com\/([^\/]+)\/([^\/]+)/);
-            const owner = match[1];
-            const repo = match[2].replace('.git', '');
-            const apiHeaders = { 'User-Agent': 'Goblin-Specs-App' };
+        // 1. FLEXIBLE GITHUB REPOSITORY DETECTION
+        // Matches https://github.com/owner/repo with optional trailing slashes or .git extensions
+        const githubMatch = url.match(/^https?:\/\/github\.com\/([^\/]+)\/([^\/]+?)(?:\.git)?(\/.*)?$/i);
+        
+        // Ensure it's a repository main page (not a /blob/, /issues/, /pull/, etc.)
+        const isRepoMainPage = githubMatch && (!githubMatch[3] || githubMatch[3] === '/');
+
+        if (isRepoMainPage) {
+            const owner = githubMatch[1];
+            const repo = githubMatch[2];
+            const apiHeaders = { 
+                'User-Agent': 'Goblin-Specs-App',
+                'Accept': 'vnd.github+json'
+            };
 
             const [repoRes, langRes, pkgRes] = await Promise.all([
                 fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers: apiHeaders }),
@@ -72,18 +76,18 @@ app.post('/api/inspect', async (req, res) => {
             });
         }
 
-        // 3. MEDIA & SOCIAL PLATFORM INSPECTION
+        // 2. FILE / DIRECT IMAGE INSPECTION
         if (url.includes('github.com') && url.includes('/blob/')) {
             url = url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
         }
 
-        const isDirectImage = /\.(jpeg|jpg|gif|png|webp|svg)(\?.*)?$/i.test(url) || url.includes('raw.githubusercontent.com');
+        const isDirectImage = /\.(jpeg|jpg|gif|png|webp|svg)(\?.*)?$|\/raw\//i.test(url) || url.includes('raw.githubusercontent.com');
         let imageUrl = null;
 
         if (isDirectImage) {
             imageUrl = url;
         } else {
-            // Attempt scraping for web pages and social previews with custom browser headers
+            // 3. SOCIAL MEDIA & GENERAL WEB SCRAPER
             const userAgentString = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36';
             try {
                 const { result } = await ogs({ 
@@ -102,16 +106,9 @@ app.post('/api/inspect', async (req, res) => {
             }
         }
 
-        // Graceful handling for heavily restricted social platforms
         if (!imageUrl) {
-            let platformName = "Web Page";
-            if (isInstagram) platformName = "Instagram";
-            else if (isFacebook) platformName = "Facebook";
-            else if (isTwitter) platformName = "X (Twitter)";
-            else if (isReddit) platformName = "Reddit";
-
             return res.status(422).json({ 
-                error: `The ${platformName} security wall blocked the goblin scouts from extracting preview media directly. Try a direct image URL or public repository link!` 
+                error: 'The goblin scouts could not extract preview media from this link due to platform security blocks.' 
             });
         }
 
