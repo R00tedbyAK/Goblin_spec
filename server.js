@@ -18,8 +18,18 @@ app.post('/api/inspect', async (req, res) => {
     if (!url) return res.status(400).json({ error: 'URL is required' });
 
     try {
-        // Fetch OpenGraph metadata from the target social media link
-        const { result } = await ogs({ url: url, timeout: 5000 });
+        // Fetch OpenGraph metadata with custom browser headers to bypass blocks
+        const userAgentString = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36';
+        const { result } = await ogs({ 
+            url: url, 
+            timeout: 5000,
+            fetchOptions: {
+                headers: {
+                    'user-agent': userAgentString
+                }
+            }
+        });
+        
         const imageUrl = result.ogImage && result.ogImage.url ? result.ogImage.url : null;
 
         if (!imageUrl) {
