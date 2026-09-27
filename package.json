@@ -1,0 +1,15 @@
+{
+  "name": "goblin-specs",
+  "version": "1.0.0",
+  "description": "Social media post dimension and aspect ratio inspector managed by goblins",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "image-size": "^1.1.1",
+    "open-graph-scraper": "^6.5.0"
+  }
+}
