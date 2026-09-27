@@ -8,37 +8,26 @@
     <link rel="icon" type="image/png" href="/goblin-icon.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @keyframes goblinScoutJump {
-            0% { transform: translateY(150px) scale(0.2); opacity: 0; }
-            60% { transform: translateY(-20px) scale(1.1); opacity: 1; }
-            100% { transform: translateY(0) scale(1); opacity: 1; }
+        @keyframes goblinSprint {
+            0% { transform: translateX(-150px) translateY(0px) scale(0.8) rotate(0deg); }
+            25% { transform: translateX(calc(25vw)) translateY(-15px) scale(1) rotate(-5deg); }
+            50% { transform: translateX(calc(50vw)) translateY(0px) scale(1.05) rotate(5deg); }
+            75% { transform: translateX(calc(75vw)) translateY(-15px) scale(1) rotate(-5deg); }
+            100% { transform: translateX(calc(100vw + 150px)) translateY(0px) scale(0.8) rotate(0deg); }
         }
-        .animate-scout-1 { animation: goblinScoutJump 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
-        .animate-scout-2 { animation: goblinScoutJump 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.1s forwards; opacity: 0; }
-        .animate-scout-3 { animation: goblinScoutJump 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.2s forwards; opacity: 0; }
+        @keyframes goblinBob {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .animate-sprint-1 { animation: goblinSprint 4.5s linear forwards, goblinBob 0.3s ease-in-out infinite; }
+        .animate-sprint-2 { animation: goblinSprint 5s linear forwards, goblinBob 0.25s ease-in-out infinite; }
+        .animate-sprint-3 { animation: goblinSprint 4.2s linear forwards, goblinBob 0.35s ease-in-out infinite; }
     </style>
 </head>
-<body class="bg-[#050505] text-slate-100 min-h-screen flex flex-col items-center justify-center p-6 selection:bg-lime-500 selection:text-black overflow-x-hidden">
+<body class="bg-[#050505] text-slate-100 min-h-screen flex flex-col items-center justify-center p-6 selection:bg-lime-500 selection:text-black overflow-x-hidden relative">
 
-    <!-- Goblin Raid Popup Overlay -->
-    <div id="goblinRaidOverlay" class="fixed inset-0 bg-black/80 z-50 hidden flex flex-col items-center justify-center space-y-6 backdrop-blur-sm">
-        <h2 class="text-3xl font-black text-lime-400 tracking-wider animate-pulse">🧌 GOBLIN SCOUTS REPORTING IN! 🧌</h2>
-        <div class="flex gap-4 md:gap-8 items-center justify-center px-4">
-            <div class="animate-scout-1 flex flex-col items-center">
-                <img src="/goblin-icon.png" class="w-24 h-24 md:w-32 md:h-32 rounded-2xl border-4 border-lime-500 object-cover shadow-[0_0_30px_rgba(132,204,22,0.5)] rotate-[-6deg]">
-                <span class="mt-2 text-xs bg-lime-500 text-black font-bold px-2 py-0.5 rounded">Scout Alpha</span>
-            </div>
-            <div class="animate-scout-2 flex flex-col items-center translate-y-4">
-                <img src="/goblin-icon.png" class="w-28 h-28 md:w-36 md:h-36 rounded-2xl border-4 border-lime-400 object-cover shadow-[0_0_40px_rgba(132,204,22,0.6)] scale-105">
-                <span class="mt-2 text-xs bg-lime-400 text-black font-bold px-2 py-0.5 rounded">Chief Forager</span>
-            </div>
-            <div class="animate-scout-3 flex flex-col items-center">
-                <img src="/goblin-icon.png" class="w-24 h-24 md:w-32 md:h-32 rounded-2xl border-4 border-lime-500 object-cover shadow-[0_0_30px_rgba(132,204,22,0.5)] rotate-[6deg]">
-                <span class="mt-2 text-xs bg-lime-500 text-black font-bold px-2 py-0.5 rounded">Scout Beta</span>
-            </div>
-        </div>
-        <p class="text-slate-400 text-sm italic">Foraging repository payloads...</p>
-    </div>
+    <!-- Dynamic Running Goblins Container -->
+    <div id="goblinRunway" class="fixed inset-0 pointer-events-none z-50 overflow-hidden hidden"></div>
 
     <div class="max-w-3xl w-full text-center space-y-6">
         <!-- Title with Goblin Green Theme -->
@@ -81,49 +70,79 @@
     </div>
 
     <script>
+        function triggerGoblinSprint() {
+            const runway = document.getElementById('goblinRunway');
+            runway.innerHTML = '';
+            runway.classList.remove('hidden');
+
+            // Define multiple running scouts with randomized vertical heights and speeds
+            const scoutConfigs = [
+                { class: 'animate-sprint-1', top: '15%', size: 'w-24 h-24 md:w-32 md:h-32', delay: '0s' },
+                { class: 'animate-sprint-2', top: '45%', size: 'w-28 h-28 md:w-36 md:h-36', delay: '0.3s' },
+                { class: 'animate-sprint-3', top: '70%', size: 'w-20 h-20 md:w-28 md:h-28', delay: '0.6s' },
+                { class: 'animate-sprint-1', top: '30%', size: 'w-24 h-24 md:w-30 md:h-30', delay: '0.9s' }
+            ];
+
+            scoutConfigs.forEach((config) => {
+                const scoutWrapper = document.createElement('div');
+                scoutWrapper.className = `absolute ${config.class}`;
+                scoutWrapper.style.top = config.top;
+                scoutWrapper.style.animationDelay = config.delay;
+
+                scoutWrapper.innerHTML = `
+                    <div class="relative flex flex-col items-center">
+                        <span class="absolute -top-6 bg-lime-500 text-black font-black text-[10px] px-2 py-0.5 rounded-full shadow-lg whitespace-nowrap animate-pulse">⚔️ CHARGE!</span>
+                        <img src="/goblin-icon.png" class="${config.size} rounded-2xl border-4 border-lime-500 object-cover shadow-[0_0_25px_rgba(132,204,22,0.7)] scale-x-[-1]">
+                    </div>
+                `;
+                runway.appendChild(scoutWrapper);
+            });
+
+            // Automatically clean up the runway after exactly 5 seconds
+            setTimeout(() => {
+                runway.innerHTML = '';
+                runway.classList.add('hidden');
+            }, 5000);
+        }
+
         async function inspectUrl() {
-            const url = document.getElementById('urlInput').value.trim();
+            const url = document.getElementById('urlInput'].value.trim();
             const statusMsg = document.getElementById('statusMsg');
             const resultCard = document.getElementById('resultCard');
             const resImage = document.getElementById('resImage');
             const resTitle = document.getElementById('resTitle');
             const resDesc = document.getElementById('resDesc');
             const resBody = document.getElementById('resBody');
-            const raidOverlay = document.getElementById('goblinRaidOverlay');
 
             if (!url) {
                 statusMsg.innerText = "Please enter a valid URL!";
                 return;
             }
 
-            statusMsg.innerText = "";
+            statusMsg.innerText = "The goblin scouts are foraging...";
             resultCard.classList.add('hidden');
 
-            // Trigger Goblin Scouts Jumping Animation
-            raidOverlay.classList.remove('hidden');
-
             try {
-                // Keep the scouts jumping for a brief immersive moment
-                const [response] = await Promise.all([
-                    fetch('/api/inspect', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ url })
-                    }),
-                    new Promise(resolve => setTimeout(resolve, 1200)) // 1.2s raid animation
-                ]);
+                const response = await fetch('/api/inspect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
 
                 const data = await response.json();
-                raidOverlay.classList.add('hidden');
 
                 if (!response.ok) {
                     throw new Error(data.error || 'Failed to inspect link.');
                 }
 
+                statusMsg.innerText = "";
                 resultCard.classList.remove('hidden');
                 resImage.src = data.imageUrl || 'https://via.placeholder.com/150';
 
                 if (data.type === 'github_repo') {
+                    // TRIGGER THE 5-SECOND DYNAMIC RUNNING GOBLIN SPRINT
+                    triggerGoblinSprint();
+
                     resTitle.innerText = data.repoName;
                     resDesc.innerText = data.description || "No description provided.";
 
@@ -180,7 +199,6 @@
                 }
 
             } catch (err) {
-                raidOverlay.classList.add('hidden');
                 statusMsg.innerText = err.message;
                 resultCard.classList.add('hidden');
             }
