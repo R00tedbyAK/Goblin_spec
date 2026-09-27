@@ -3,37 +3,146 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Goblin_specs — Social Media Dimension Tool</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Goblin_specs - Deep Technical Inspector</title>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-center p-6">
 
-    <header>
-        <div class="logo-box"></div>
-        <div class="brand">Goblin_specs</div>
-    </header>
+    <div class="max-w-3xl w-full text-center space-y-6">
+        <h1 class="text-4xl font-extrabold tracking-tight text-cyan-400">Goblin_specs Inspector</h1>
+        <p class="text-slate-400">Let the pixel goblins forage public links for repository specs, languages, and media dimensions.</p>
 
-    <div class="main-container">
-        <h1>Unearth Post Dimensions Instantly</h1>
-        <p class="sub">Let the pixel goblins forage any public social media link for exact pixel sizes and aspect ratios.</p>
-        
-        <div class="input-group">
-            <input type="text" id="urlInput" placeholder="Paste link (e.g., https://instagram.com/p/...)">
-            <button id="inspectBtn" onclick="inspectLink()">Inspect</button>
+        <!-- Input Box -->
+        <div class="flex gap-2 max-w-xl mx-auto">
+            <input type="text" id="urlInput" placeholder="Paste GitHub repo or media URL..." 
+                class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-slate-200 focus:outline-none focus:border-cyan-500">
+            <button onclick="inspectUrl()" id="inspectBtn" 
+                class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-6 py-3 rounded-lg transition-all">
+                Inspect
+            </button>
         </div>
 
-        <div id="resultCard" class="result-card">
-            <div class="result-grid">
-                <img id="previewImg" src="" alt="Media Preview">
-                <div class="metrics">
-                    <h3 id="ratioOutput">Ratio: --</h3>
-                    <p><strong>Dimensions:</strong> <span id="dimOutput">--</span> px</p>
-                    <p><strong>Compatibility:</strong> <span id="recOutput">--</span></p>
+        <!-- Loading / Status -->
+        <div id="statusMsg" class="text-cyan-400 font-medium h-6"></div>
+
+        <!-- Result Card -->
+        <div id="resultCard" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-6 text-left shadow-2xl space-y-6">
+            
+            <!-- Header Section -->
+            <div class="flex items-center gap-4 border-b border-slate-800 pb-4">
+                <img id="resImage" src="" alt="Preview" class="w-20 h-20 rounded-xl object-cover border border-slate-700 bg-slate-800">
+                <div>
+                    <h2 id="resTitle" class="text-2xl font-bold text-white"></h2>
+                    <p id="resDesc" class="text-slate-400 text-sm mt-1"></p>
                 </div>
             </div>
+
+            <!-- Dynamic Content Area -->
+            <div id="resBody" class="space-y-4 text-sm">
+                <!-- Injected via JavaScript based on data type -->
+            </div>
+
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <script>
+        async function inspectUrl() {
+            const url = document.getElementById('urlInput').value.trim();
+            const statusMsg = document.getElementById('statusMsg');
+            const resultCard = document.getElementById('resultCard');
+            const resImage = document.getElementById('resImage');
+            const resTitle = document.getElementById('resTitle');
+            const resDesc = document.getElementById('resDesc');
+            const resBody = document.getElementById('resBody');
+
+            if (!url) {
+                statusMsg.innerText = "Please enter a valid URL!";
+                return;
+            }
+
+            statusMsg.innerText = "The goblin scouts are foraging...";
+            resultCard.classList.add('hidden');
+
+            try {
+                const response = await fetch('/api/inspect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to inspect link.');
+                }
+
+                statusMsg.innerText = "";
+                resultCard.classList.remove('hidden');
+                resImage.src = data.imageUrl || 'https://via.placeholder.com/150';
+
+                if (data.type === 'github_repo') {
+                    // RENDER GITHUB REPOSITORY INSIGHTS
+                    resTitle.innerText = data.repoName;
+                    resDesc.innerText = data.description || "No description provided.";
+
+                    let languagesHtml = Object.entries(data.languages)
+                        .map(([lang, bytes]) => `<span class="bg-slate-800 text-cyan-300 px-2.5 py-1 rounded-md text-xs font-mono">${lang}</span>`)
+                        .join(' ') || '<span class="text-slate-500">No language data</span>';
+
+                    let filesHtml = data.fileContents
+                        .map(f => `<span class="bg-slate-800/60 text-slate-300 px-2 py-0.5 rounded text-xs">${f.type === 'dir' ? '📁' : '📄'} ${f.name}</span>`)
+                        .join(' ');
+
+                    resBody.innerHTML = `
+                        <div class="grid grid-cols-2 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800">
+                            <div>⭐ <strong>Stars:</strong> ${data.stars}</div>
+                            <div>🍴 <strong>Forks:</strong> ${data.forks}</div>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-slate-300 mb-2">Languages Used:</h3>
+                            <div class="flex flex-wrap gap-2">${languagesHtml}</div>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-slate-300 mb-2">Backend Stack Detected:</h3>
+                            <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-slate-300 space-y-1">
+                                <div>🚀 <strong>Runtime:</strong> ${data.backendService.stack}</div>
+                                <div>📦 <strong>Version:</strong> ${data.backendService.version}</div>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-slate-300 mb-2">Root File Contents (${data.fileContents.length}):</h3>
+                            <div class="flex flex-wrap gap-2 max-h-36 overflow-y-auto p-2 bg-slate-950 rounded-xl border border-slate-800">${filesHtml}</div>
+                        </div>
+                    `;
+
+                } else {
+                    // RENDER MEDIA SPECS
+                    resTitle.innerText = "Media Asset Analysis";
+                    resDesc.innerText = data.recommendation;
+
+                    resBody.innerHTML = `
+                        <div class="grid grid-cols-3 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800 text-center">
+                            <div>
+                                <div class="text-slate-400 text-xs">Aspect Ratio</div>
+                                <div class="text-lg font-bold text-cyan-400">${data.aspectRatio}</div>
+                            </div>
+                            <div>
+                                <div class="text-slate-400 text-xs">Dimensions</div>
+                                <div class="text-lg font-bold text-white">${data.width} × ${data.height} px</div>
+                            </div>
+                            <div>
+                                <div class="text-slate-400 text-xs">Compatibility</div>
+                                <div class="text-sm font-semibold text-emerald-400 mt-1">${data.recommendation}</div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+            } catch (err) {
+                statusMsg.innerText = err.message;
+                resultCard.classList.add('hidden');
+            }
+        }
+    </script>
 </body>
 </html>
