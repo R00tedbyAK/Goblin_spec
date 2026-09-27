@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Goblin_specs — Social Media Dimension Tool</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header>
+        <div class="logo-box"></div>
+        <div class="brand">Goblin_specs</div>
+    </header>
+
+    <div class="main-container">
+        <h1>Unearth Post Dimensions Instantly</h1>
+        <p class="sub">Let the pixel goblins forage any public social media link for exact pixel sizes and aspect ratios.</p>
+        
+        <div class="input-group">
+            <input type="text" id="urlInput" placeholder="Paste link (e.g., https://instagram.com/p/...)">
+            <button id="inspectBtn" onclick="inspectLink()">Inspect</button>
+        </div>
+
+        <div id="resultCard" class="result-card">
+            <div class="result-grid">
+                <img id="previewImg" src="" alt="Media Preview">
+                <div class="metrics">
+                    <h3 id="ratioOutput">Ratio: --</h3>
+                    <p><strong>Dimensions:</strong> <span id="dimOutput">--</span> px</p>
+                    <p><strong>Compatibility:</strong> <span id="recOutput">--</span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
